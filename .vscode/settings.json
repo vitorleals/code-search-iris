@@ -1,7 +1,0 @@
-{
-    "objectscript.conn": {
-        "server": "ensemble-local",
-        "ns": "%SYS",
-        "active": true
-    }
-}
