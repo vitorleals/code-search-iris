@@ -758,7 +758,7 @@ ClientMethod doSearch() [ Language = javascript ]
 	document.getElementById('btnSearch').disabled = true;
 	document.getElementById('btnCancel').style.display = 'inline-block';
 	this.hideWarnings();
-	zen('resultsHost').setProperty('content', '');
+	this.setResultsHtml('');
 	this._lastRender = null;
 
 	var self = this;
@@ -956,7 +956,7 @@ ClientMethod clearForm() [ Language = javascript ]
 	this.clearFormError();
 	this.hideWarnings();
 	this.setStatus('', '');
-	zen('resultsHost').setProperty('content', '');
+	this.setResultsHtml('');
 	this._lastData = null;
 	this._lastRender = null;
 	document.getElementById('txtTermInput').focus();
@@ -1225,7 +1225,7 @@ ClientMethod renderResults(pData, pTerm, pWholeWord, pCaseSensitive) [ Language 
 	this.showWarnings(warnings);
 
 	if (pData.rows.length === 0) {
-		zen('resultsHost').setProperty('content',
+		this.setResultsHtml(
 			'<div class="empty-state"><p><strong>' + this.esc(this.msg('emptyTitle', { term: pTerm })) + '</strong></p>'
 			+ '<p class="muted">' + this.esc(this.msg('emptyHint')) + '</p></div>');
 		return;
@@ -1281,7 +1281,19 @@ ClientMethod renderResults(pData, pTerm, pWholeWord, pCaseSensitive) [ Language 
 		html.push('</details>');
 	}
 	html.push('</div>');
-	zen('resultsHost').setProperty('content', html.join(''));
+	this.setResultsHtml(html.join(''));
+}
+
+/// Writes the results HTML straight into the DOM. It must NOT use
+/// setProperty('content'): on a Zen html component that triggers a server
+/// round trip (refreshContents) carrying the whole HTML, which fails with
+/// <MAXSTRING> when there are many results.
+ClientMethod setResultsHtml(pHtml) [ Language = javascript ]
+{
+	var div = zen('resultsHost').getEnclosingDiv();
+	if (div) {
+		div.innerHTML = pHtml;
+	}
 }
 
 /// Filters, on the client, the rows already shown (by code snippet or item
