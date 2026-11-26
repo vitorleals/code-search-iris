@@ -1,125 +1,125 @@
 # CodeSearch
 
-*[English](README.en.md) | Português*
+*English | [Português](README.pt.md)*
 
-Ferramenta web para InterSystems IRIS/Caché que pesquisa um texto no código-fonte (classes e rotinas) de **todos os namespaces de uma vez**, sem precisar entrar em cada um.
+A web tool for InterSystems IRIS/Caché that searches for text in the source code (classes and routines) of **all namespaces at once**, without having to enter each one.
 
-## Conteúdo
+## Contents
 
-| Classe | Função |
+| Class | Purpose |
 |---|---|
-| `CodeSearch.Page` | Página Zen com o formulário de busca e a exibição dos resultados. |
-| `CodeSearch.SearchAPI` | Endpoint HTTP (`%CSP.Page`) em JSON, chamado pela página. Ações: `start`, `status`, `result` e `cancel`. |
-| `CodeSearch.Engine` | Lógica de busca: lista namespaces, enumera itens, lê o código e monta os trechos encontrados. |
-| `CodeSearch.Messages` | Dicionário de mensagens (i18n) da interface, em inglês, espanhol e português. |
+| `CodeSearch.Page` | Zen page with the search form and the results display. |
+| `CodeSearch.SearchAPI` | JSON HTTP endpoint (`%CSP.Page`) called by the page. Actions: `start`, `status`, `result` and `cancel`. |
+| `CodeSearch.Engine` | Search logic: lists namespaces, enumerates items, reads the code and builds the snippets found. |
+| `CodeSearch.Messages` | Message dictionary (i18n) for the interface, in English, Spanish and Portuguese. |
 
-## Como a busca funciona
+## How the search works
 
-A busca roda em **segundo plano**, em um processo `Job` do servidor. Isso evita o erro HTTP 504 do Web Gateway, que corta qualquer requisição aberta por mais de ~60 s. O fluxo é:
+The search runs in the **background**, in a server `Job` process. This avoids the Web Gateway HTTP 504 error, which cuts off any request open for more than ~60 s. The flow is:
 
-1. A página chama `start`, e o servidor inicia o job e devolve um `jobId` na hora.
-2. A página consulta `status` a cada ~0,7 s e mostra o andamento (namespace atual, namespaces concluídos, itens verificados e ocorrências).
-3. Quando o job termina, a página busca o `result` e exibe os resultados.
+1. The page calls `start`, and the server starts the job and immediately returns a `jobId`.
+2. The page queries `status` every ~0.7 s and shows the progress (current namespace, namespaces completed, items checked and matches).
+3. When the job finishes, the page fetches the `result` and displays the results.
 
-O estado do job fica no global `^CodeSearchJob`, no namespace onde as classes estão instaladas. Jobs antigos (mais de 1 hora) são apagados automaticamente. Cada job só pode ser consultado ou cancelado pelo usuário que o iniciou.
+The job state is kept in the `^CodeSearchJob` global, in the namespace where the classes are installed. Old jobs (older than 1 hour) are deleted automatically. Each job can only be queried or cancelled by the user who started it.
 
-## Requisitos
+## Requirements
 
-- InterSystems IRIS (ou Caché com suporte a JSON dinâmico e SQL `%SQL.Statement`).
-- Acesso a uma Web Application CSP, que pode ser criada no Portal de Administração.
-- Usuário com permissão de leitura nos namespaces que se deseja pesquisar. Namespaces sem acesso são listados como aviso na tela e não interrompem a busca.
+- InterSystems IRIS (or Caché with support for dynamic JSON and `%SQL.Statement` SQL).
+- Access to a CSP Web Application, which can be created in the Management Portal.
+- A user with read permission on the namespaces to be searched. Namespaces without access are listed as a warning on screen and do not interrupt the search.
 
-## Instalação
+## Installation
 
-1. **Importe e compile as classes** no namespace `%SYS`, para que o `%SYS.Namespace` seja acessível. O namespace usado pelo VS Code está em `.vscode/settings.json`.
+1. **Import and compile the classes** in the `%SYS` namespace, so that `%SYS.Namespace` is accessible. The namespace used by VS Code is in `.vscode/settings.json`.
 
-   Pelo terminal do IRIS:
+   From the IRIS terminal:
 
    ```objectscript
    zn "%SYS"
-   do $system.OBJ.LoadDir("C:\caminho\para\SearchAll-app\CodeSearch", "ck", .errors, 1)
+   do $system.OBJ.LoadDir("C:\path\to\SearchAll-app\CodeSearch", "ck", .errors, 1)
    ```
 
-   Ou pelo VS Code, com a extensão InterSystems ObjectScript: abra a pasta e use **Import and Compile**.
+   Or from VS Code, with the InterSystems ObjectScript extension: open the folder and use **Import and Compile**.
 
-2. **Crie uma Web Application CSP** em *System Administration > Security > Applications > Web Applications*:
+2. **Create a CSP Web Application** in *System Administration > Security > Applications > Web Applications*:
 
-   | Campo | Valor sugerido |
+   | Field | Suggested value |
    |---|---|
    | Name | `/csp/codesearch` |
    | Namespace | `%SYS` |
-   | Enable | Application, mais o método de autenticação desejado (ex.: Password) |
-   | Allowed Authentication Methods | pelo menos um método autenticado, **não** use acesso sem login |
+   | Enable | Application, plus the desired authentication method (e.g.: Password) |
+   | Allowed Authentication Methods | at least one authenticated method, **do not** allow unauthenticated access |
 
-   `CodeSearch.Page` e `CodeSearch.SearchAPI` ficam na mesma aplicação, e a página chama a API por caminho relativo.
+   `CodeSearch.Page` and `CodeSearch.SearchAPI` live in the same application, and the page calls the API by relative path.
 
-3. **Acesse a página:**
+3. **Open the page:**
 
    ```
-   http://<servidor>:<porta>/csp/codesearch/CodeSearch.Page.cls
+   http://<server>:<port>/csp/codesearch/CodeSearch.Page.cls
    ```
 
-> **Segurança:** por padrão, a página é protegida apenas pela autenticação da Web Application. Ela lê o código-fonte de todos os namespaces permitidos ao usuário logado. Restrinja o acesso a quem precisa. Para exigir uma role dedicada, crie um Resource (ex.: `%CodeSearch_Search`), uma Role com `USE` nele, e descomente/adicione em `CodeSearch.Page`:
+> **Security:** by default, the page is protected only by the Web Application authentication. It reads the source code of every namespace the logged-in user is allowed to access. Restrict access to those who need it. To require a dedicated role, create a Resource (e.g.: `%CodeSearch_Search`), a Role with `USE` on it, and uncomment/add in `CodeSearch.Page`:
 >
 > ```objectscript
 > Parameter SECURITYRESOURCE = "%CodeSearch_Search:USE";
 > ```
 
-## Como usar
+## How to use
 
-1. Digite o **texto a pesquisar** (mínimo de 3 caracteres) e tecle **Enter** ou clique em **Pesquisar**.
-2. Ajuste as opções, se necessário:
-   - **Palavra inteira:** só conta quando o termo aparece isolado (delimitado por caracteres que não sejam letra, dígito ou `_`).
-   - **Diferenciar maiúsc./minúsc.:** por padrão a busca ignora a caixa.
-   - **Namespaces:** seletor suspenso com multisseleção. O botão resume a escolha ("Todos os namespaces (29)", os nomes quando há até 2, ou "3 de 29 selecionados"). Ao clicar, abre a lista com campo de filtro e os atalhos **Selecionar todos** e **Limpar**, que valem só para os itens visíveis no filtro. Todos vêm marcados por padrão. Clique fora ou tecle Esc para fechar.
-   - **Extensões:** `.cls`, `.mac`, `.int`, `.inc`, `.bas`.
-   - **Máscara de nome (opcional):** filtra pelo nome do item. Aceita vários padrões separados por vírgula e `*` como curinga, sempre sem diferenciar maiúsculas de minúsculas. Exemplos: `app*.cls`, `*.mac,my.test.*.mac`. **Quando preenchida, substitui as extensões marcadas.**
-3. Acompanhe o andamento: a barra e o status mostram o namespace atual, quantos já foram varridos, itens verificados, ocorrências e tempo decorrido. **Esc** ou o botão **Cancelar** interrompe a busca no servidor, e os resultados encontrados até então são exibidos.
-4. Veja os resultados, agrupados por namespace e por classe/rotina, com o termo destacado e o número da linha:
-   - **Filtrar resultados** refina a lista já exibida, por trecho de código ou nome do item.
-   - **Expandir tudo / Recolher tudo** controla os grupos.
-   - **Copiar nome** copia o nome do item para a área de transferência.
+1. Type the **text to search** (minimum 3 characters) and press **Enter** or click **Search**.
+2. Adjust the options, if needed:
+   - **Whole word:** only counts when the term appears on its own (delimited by characters that are not a letter, digit or `_`).
+   - **Match case:** by default the search ignores case.
+   - **Namespaces:** dropdown selector with multi-select. The button summarizes the choice ("All namespaces (29)", the names when up to 2 are selected, or "3 of 29 selected"). Clicking it opens the list with a filter field and the **Select all** and **Clear** shortcuts, which apply only to the items visible under the filter. All are checked by default. Click outside or press Esc to close.
+   - **Extensions:** `.cls`, `.mac`, `.int`, `.inc`, `.bas`.
+   - **Name mask (optional):** filters by item name. Accepts several comma-separated patterns and `*` as a wildcard, always case-insensitive. Examples: `app*.cls`, `*.mac,my.test.*.mac`. **When filled in, it replaces the checked extensions.**
+3. Follow the progress: the bar and the status show the current namespace, how many have been scanned, items checked, matches and elapsed time. **Esc** or the **Cancel** button stops the search on the server, and the results found so far are displayed.
+4. View the results, grouped by namespace and by class/routine, with the term highlighted and the line number:
+   - **Filter results** narrows the list already shown, by code snippet or item name.
+   - **Expand all / Collapse all** controls the groups.
+   - **Copy name** copies the item name to the clipboard.
 
-### Atalhos
+### Shortcuts
 
-| Tecla | Ação |
+| Key | Action |
 |---|---|
-| Enter | Pesquisar |
-| Esc | Cancelar a busca em andamento |
-| Ctrl+K | Voltar ao campo de busca |
+| Enter | Search |
+| Esc | Cancel the search in progress |
+| Ctrl+K | Go back to the search field |
 
-As preferências (termo, opções, extensões e namespaces selecionados) ficam salvas no navegador (localStorage) e são restauradas na próxima visita. O botão **Limpar** apaga o termo, a máscara e os resultados.
+The preferences (term, options, extensions and selected namespaces) are saved in the browser (localStorage) and restored on the next visit. The **Clear** button erases the term, the mask and the results.
 
-## Idiomas (i18n)
+## Languages (i18n)
 
-A interface está disponível em **inglês (en)**, **espanhol (es)** e **português (pt)**. O idioma é escolhido no seletor do cabeçalho; na primeira visita vale o idioma do navegador (ex.: `es-MX` usa `es`) e, se não houver tradução, o inglês. A escolha fica salva no navegador (`codesearch.lang`).
+The interface is available in **English (en)**, **Spanish (es)** and **Portuguese (pt)**. The language is chosen with the selector in the header; on the first visit the browser language applies (e.g.: `es-MX` uses `es`) and, if there is no translation, English. The choice is saved in the browser (`codesearch.lang`).
 
-Os textos ficam em `CodeSearch.Messages`, um bloco `XData` XML por idioma (`<m k="chave">texto</m>`, com `%placeholders%`). O inglês é o idioma de reserva: chave ausente em outro idioma usa o texto em inglês. Para adicionar um idioma:
+The texts live in `CodeSearch.Messages`, one XML `XData` block per language (`<m k="key">text</m>`, with `%placeholders%`). English is the fallback language: a key missing from another language uses the English text. To add a language:
 
-1. Copie o bloco `XData en`, renomeie para o código do novo idioma (ex.: `fr`) e traduza os valores, mantendo as chaves e os `%placeholders%`.
-2. Inclua o código em `LANGUAGES` e o nome nativo em `LANGUAGENAMES` (mesma ordem) e recompile.
+1. Copy the `XData en` block, rename it to the new language code (e.g.: `fr`) and translate the values, keeping the keys and the `%placeholders%`.
+2. Add the code to `LANGUAGES` and its native name to `LANGUAGENAMES` (same order) and recompile.
 
-As respostas de erro da API (`SearchAPI`) trazem `error` (texto em inglês), `errorCode` e `errorParams`; a página traduz usando a chave `err.<errorCode>`.
+The API error responses (`SearchAPI`) carry `error` (English text), `errorCode` and `errorParams`; the page translates them using the key `err.<errorCode>`.
 
-## Limites
+## Limits
 
-Definidos como parâmetros em `CodeSearch.Engine`:
+Defined as parameters in `CodeSearch.Engine`:
 
-| Parâmetro | Padrão | Descrição |
+| Parameter | Default | Description |
 |---|---|---|
-| `MAXRESULTS` | 500 | Máximo de ocorrências por busca. |
-| `MAXSECONDS` | 600 | Tempo máximo de busca, em segundos. Como a busca roda em segundo plano, esse valor não é limitado pelo timeout do Web Gateway. |
-| `MINTERMLEN` | 3 | Tamanho mínimo do termo. |
-| `SNIPPETCONTEXTCHARS` | 80 | Caracteres de contexto antes/depois do termo no trecho exibido. |
+| `MAXRESULTS` | 500 | Maximum number of matches per search. |
+| `MAXSECONDS` | 600 | Maximum search time, in seconds. Since the search runs in the background, this value is not limited by the Web Gateway timeout. |
+| `MINTERMLEN` | 3 | Minimum length of the term. |
+| `SNIPPETCONTEXTCHARS` | 80 | Characters of context before/after the term in the displayed snippet. |
 
-Ao atingir `MAXRESULTS` ou `MAXSECONDS`, a busca para e a tela mostra um aviso de resultado truncado. Nesse caso, use um termo mais específico ou selecione menos namespaces e extensões.
+When `MAXRESULTS` or `MAXSECONDS` is reached, the search stops and the screen shows a truncated-results warning. In that case, use a more specific term or select fewer namespaces and extensions.
 
-## Solução de problemas
+## Troubleshooting
 
-- **"Resposta do servidor não é JSON":** `CodeSearch.SearchAPI` não foi compilada, ou a sessão expirou e o servidor devolveu uma página de login. Recompile e recarregue a página.
-- **"Não foi possível iniciar o processo de busca em segundo plano":** o servidor não conseguiu criar o `Job` (limite de processos/licenças atingido). Tente de novo ou peça a um administrador para verificar.
-- **"O processo de busca parou de responder":** o job ficou mais de 3 minutos sem sinal de vida (ex.: foi encerrado no Portal). Faça a busca novamente.
-- **"Busca não encontrada ou expirada":** o job foi apagado (mais de 1 hora) ou pertence a outro usuário.
-- **Lista de namespaces vazia:** as classes precisam estar compiladas no `%SYS`, e o usuário precisa de acesso à listagem de namespaces.
-- **Namespace aparece em "Sem acesso ou erro":** o usuário logado não tem permissão de leitura nele.
-- **Classes não encontradas:** confira se `.cls` está marcada em Extensões e se a máscara está vazia ou compatível com o nome do item.
+- **"The server response is not JSON":** `CodeSearch.SearchAPI` was not compiled, or the session expired and the server returned a login page. Recompile and reload the page.
+- **"Could not start the background search process":** the server could not create the `Job` (process/license limit reached). Try again or ask an administrator to check.
+- **"The search process stopped responding":** the job went more than 3 minutes without a sign of life (e.g.: it was terminated in the Portal). Run the search again.
+- **"Search not found or expired":** the job was deleted (older than 1 hour) or belongs to another user.
+- **Empty namespace list:** the classes must be compiled in `%SYS`, and the user needs access to the namespace listing.
+- **Namespace shown under "No access or errors in namespaces":** the logged-in user has no read permission on it.
+- **Classes not found:** check that `.cls` is checked under Extensions and that the mask is empty or compatible with the item name.
